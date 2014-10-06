@@ -97,57 +97,6 @@ public class SinSeriesSimulation {
 
         double totalSinSum = atomicSumRef.get();
 
-        //------CyclicBarrier----------------------
-        /*final CyclicBarrier barrier = new CyclicBarrier(threadsCount, null);
-        final AtomicReference<Double> atomicSum = new AtomicReference<>(0.d);
-
-        class Worker extends Thread {
-
-            CyclicBarrier cyclicBarrier;
-            int offset;
-
-            public Worker(CyclicBarrier cyclicBarrier, String name, int offset) {
-                super(name);
-                this.cyclicBarrier = cyclicBarrier;
-                this.offset = offset;
-            }
-
-            @Override
-            public void run() {
-                try {
-                    double sum = 0.d;
-
-                    for (int k = -1 * ITERATIONS_COUNT + offset; k < ITERATIONS_COUNT; k += threadsCount ) {
-                        sum += Math.sin(k);
-                    }
-
-                    synchronized (atomicSum) {
-                        atomicSum.getAndSet(atomicSum.get() + sum);
-                    }
-                    cyclicBarrier.await();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        Thread[] threads = new Thread[threadsCount];
-
-        long startTime = System.nanoTime();
-        for (int i = 0; i < threadsCount; i++) {
-            threads[i] = new Worker(barrier, "Thread" + i, i);
-            threads[i].start();
-        }
-        for (Thread t : threads)
-            try {
-                System.out.println(t.getName());
-                t.join();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        long endTime = System.nanoTime();
-        double totalSinSum = atomicSum.get();*/
-
         System.out.println("Total sum of sinus series from: " + -ITERATIONS_COUNT + " to " + ITERATIONS_COUNT + " is: " + totalSinSum);
         System.out.println("THREADS " + threadsCount);
         System.out.println("ITERATIONS " + ITERATIONS_COUNT);

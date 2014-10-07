@@ -1,50 +1,22 @@
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.util.ArrayList;
 import java.util.InvalidPropertiesFormatException;
-import java.util.Random;
-import java.util.concurrent.CountDownLatch;
+import java.util.List;
+import java.util.concurrent.*;
 
 /**
  * Created by alexgorbunov on 10/4/14.
  */
-class BankAccount {
-    private final long id;
-    private int balance;
-
-    public BankAccount(long id, int balance) {
-        this.id = id;
-        this.balance = balance;
-    }
-
-    public BankAccount(long id) {
-        this(id, 0);
-    }
-
-    public void debit(double money) {
-        balance += money;
-    }
-
-    public void credit(double money) {
-        balance -= money;
-    }
-
-    public int getBalance() {
-        return balance;
-    }
-
-    public long getID() {
-        return id;
-    }
-
-    @Override
-    public String toString() {
-        return "Account ID: " + getID() + ", balance: " + getBalance();
-    }
-}
 
 public class FinancialServicesSimulation<T> {
     private static final int TRANSFER_FORMAT_ARGUMENTS = 3;
+    private static final int DEFAULT_ACCOUNTS_NUMBER = 300;
+    private static final int DEFAULT_TRANSFERS_NUMBER = 4_500_000;
+    private static final int TRANSFER_AMOUNT_BOUND = 1_200;
+    private static final int PRODUCERS_COUNT = 4;
+    private static final int CONSUMERS_COUNT = 4;
+    private static final String INPUT_FILE_NAME = "transfers.txt";
+
     private Object lock = new Object();
     private CircularBuffer<T> buffer;
 
@@ -54,7 +26,7 @@ public class FinancialServicesSimulation<T> {
 
     public void transfer(final BankAccount fromAccount, final BankAccount toAccount, final int amount) {
         class TransferProcessing {
-            public void transfer() throws InsufficientFundsException {
+            public void transfer() {
                 fromAccount.credit(amount);
                 toAccount.debit(amount);
             }
@@ -102,84 +74,65 @@ public class FinancialServicesSimulation<T> {
     }
 
     public static void main(String[] args) throws InvalidPropertiesFormatException, InterruptedException {
-        StringBuilder builder = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        new FileInputStream("src/transfers.txt"), "utf-8")) ) {
-            String line = null;
-            while ((line = reader.readLine()) != null) {
-                builder.append(line).append('\n');
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("somthing wrong occurred!");
+        final String[] input = getInitialData();
+
+        if (input.length != 2) {
+            throw new RuntimeException("Incorrect data parsed, Expected value: 2, Current: " + input.length);
         }
 
-        System.out.println(builder);
-
-        String[] lines = generateInitialData(140, 13240);
-
-        //lines = builder.toString().split("\n");
-
-        if (lines.length != 2) {
-            throw new RuntimeException("Incorrect data parsed");
+        String[] rawAccounts = input[0].split(" ");
+        final BankAccount[] bankAccounts = new BankAccount[ Integer.parseInt(rawAccounts[0]) ];
+        int offset = 0;
+        for (int i = 0; i < bankAccounts.length; i++) {
+            bankAccounts[i] = new BankAccount(i, Integer.valueOf(rawAccounts[i + 1]) );
         }
-
-        String[] accountsInfo = lines[0].split(" ");
-        final BankAccount[] bankAccounts = new BankAccount[ Integer.parseInt(accountsInfo[0]) ];
-        for (int i = 0; i < accountsInfo.length - 1; i++) {
-            bankAccounts[i] = new BankAccount(i, Integer.valueOf(accountsInfo[i + 1]) );
-        }
+        rawAccounts = null;
 
         int total = 0;
         for (BankAccount account : bankAccounts) {
-            //System.out.println(account);
             total += account.getBalance();
         }
 
-        System.out.println("Total sum: " + total);
+        System.out.println("Initial total account balance: " + total);
 
-        String[] transfers = lines[1].split(" ");
-        if (transfers.length < 1)
+        final String[] rawTransfers = input[1].split(" ");
+        if (rawTransfers.length < 1)
             throw new InvalidPropertiesFormatException("Invalid transfers declaration");
 
-        final int transfersCount = Integer.valueOf(transfers[0]);
-        if (transfersCount != (transfers.length - 1) / TRANSFER_FORMAT_ARGUMENTS) {
+        final int transfersCount = Integer.valueOf(rawTransfers[0]);
+        if (transfersCount != (rawTransfers.length - 1) / TRANSFER_FORMAT_ARGUMENTS) {
             throw new IllegalArgumentException("Claimed transfers number is not equal to real transfers declaration");
         }
 
+        final FinancialServicesSimulation<TransferTask> simulation = new FinancialServicesSimulation<>(5_000);
+        final CountDownLatch latch = new CountDownLatch(1);
 
-        class TransferTask {
-            private final int fromAccountID;
-            private final int toAccountID;
-            private final int amount;
-
-            public int getFromAccountID() {
-                return fromAccountID;
-            }
-
-            public int getToAccountID() {
-                return toAccountID;
-            }
-
-            public int getAmount() {
-                return amount;
-            }
-
-            TransferTask(int fromAccountID, int toAccountID, int amount) {
-                this.fromAccountID = fromAccountID;
-                this.toAccountID = toAccountID;
-                this.amount = amount;
+        class Producer extends Thread {
+            private int offset = 0;
+            public Producer(String name, int offset) {
+                super(name + offset);
             }
 
             @Override
-            public String toString() {
-                return "from: " + getFromAccountID() + ", to: " + getToAccountID() + ", amount: " + getAmount();
+            public void run() {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                for (int i = offset + 1; i < rawTransfers.length; i += PRODUCERS_COUNT * TRANSFER_FORMAT_ARGUMENTS) {
+                    try {
+                        simulation.put( new TransferTask(
+                                Integer.valueOf(rawTransfers[i]),
+                                Integer.valueOf(rawTransfers[i + 1]),
+                                Integer.valueOf(rawTransfers[i + 2]) ));
+                    } catch (InterruptedException e) {
+                        System.out.println("Thread " + Thread.currentThread().getName() + " interrupted abruptly.");
+                    }
+                }
             }
         }
-
-        final FinancialServicesSimulation simulation = new FinancialServicesSimulation<TransferTask>(50);
-        final CountDownLatch latch = new CountDownLatch(1);
 
         class Consumer extends Thread {
             private boolean valid = true;
@@ -196,7 +149,6 @@ public class FinancialServicesSimulation<T> {
 
                 while (valid) {
                     try {
-
                         TransferTask task = (TransferTask) simulation.take();
                         simulation.transfer(bankAccounts[task.getFromAccountID()],
                                 bankAccounts[task.getToAccountID()],
@@ -208,76 +160,121 @@ public class FinancialServicesSimulation<T> {
                 }
             }
         }
-//        Producer producer = new Producer("MainProducer");
-//        producer.start();
-        Consumer[] consumers = new Consumer[3];
+        Producer[] producers = new Producer[PRODUCERS_COUNT];
+        for (int i = 0; i < producers.length; i++) {
+            producers[i] = new Producer("Producer", i);
+            producers[i].start();
+        }
+        Consumer[] consumers = new Consumer[CONSUMERS_COUNT];
         for (int i = 0; i < consumers.length; i++) {
             consumers[i] = new Consumer("Consumer" + i);
             consumers[i].start();
         }
 
+        long start = System.nanoTime();
         latch.countDown();
 
-        int incNumber = 0;
-        long start = System.nanoTime();
-        for (int i = 0; i < transfersCount; i++) {
-            incNumber = i * TRANSFER_FORMAT_ARGUMENTS;
-            TransferTask task = new TransferTask(
-                    Integer.valueOf(transfers[incNumber + 1]),
-                    Integer.valueOf(transfers[incNumber + 2]),
-                    Integer.valueOf(transfers[incNumber + 3])
-            );
-            simulation.put(task);
-
-
-//            simulation.transfer(
-//                    bankAccounts[Integer.valueOf(transfers[incNumber + 1])],
-//                    bankAccounts[Integer.valueOf(transfers[incNumber + 2])],
-//                    Integer.valueOf(transfers[incNumber + 3])
-//            );
+        for (Producer producer : producers) {
+            try {
+                producer.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
-        while(simulation.buffer.getSize() != 0) {
-            Thread.sleep(20);
+        while (simulation.buffer.getSize() != 0) {
+            Thread.yield();
         }
-        long finish = System.nanoTime();
 
         for (Consumer consumer : consumers) {
             if (consumer.isAlive())
                 consumer.interrupt();
         }
+        long finish = System.nanoTime();
 
         int finalSum = 0;
         for (BankAccount account : bankAccounts) {
-            //System.out.println(account);
             finalSum += account.getBalance();
         }
 
-        System.out.println("Final sum: " + finalSum);
+        Thread.sleep(30);
+        System.out.println("Final total account balance: " + finalSum);
         System.out.println("TIME " + (double)(finish - start)/1_000_000_000 + "sec");
     }
 
 
-    private static String[] generateInitialData(int accountsNumber, int transfersNumber) {
-        Random random = new Random();
-
-        StringBuilder builder = new StringBuilder();
-        builder.append(accountsNumber);
-        for (int i = 0; i < accountsNumber; i++) {
-            builder.append(' ').append(Math.abs(random.nextInt(1500)));
+    private static String[] getInitialData() {
+        File file = new File(INPUT_FILE_NAME);
+        if (!file.exists()) {
+            return TransferDataGeneratorHelper.
+                    generateInitialData(DEFAULT_ACCOUNTS_NUMBER, DEFAULT_TRANSFERS_NUMBER);
         }
 
-        builder.append('\n');
-        builder.append(transfersNumber);
-
-        for (int i = 0; i < transfersNumber; i++) {
-            builder.append(' ').append(random.nextInt(accountsNumber)).
-                append(' ').append(random.nextInt(accountsNumber)).
-                append(' ').append(Math.abs(random.nextInt(1000)));
+        String[] result = new String[2];
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(
+                        new FileInputStream( file.getPath() ), "utf-8"))) {
+            String line = null;
+            for (int i = 0; (line = reader.readLine()) != null; i++) {
+                if (i > 1)
+                    return TransferDataGeneratorHelper.
+                            generateInitialData(DEFAULT_ACCOUNTS_NUMBER, DEFAULT_TRANSFERS_NUMBER);
+                result[i] = line;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        System.out.println(builder);
+        return result;
+    }
 
-        return builder.toString().split("\n");
+    private static class TransferDataGeneratorHelper {
+        private static final int DEFAULT_BALANCE_BOUND = 2_500;
+        public static String[] generateInitialData(final int accountsNumber, final int transferNumber) {
+            List<Future<String>> futures = new ArrayList<>();
+            ExecutorService threadPool = Executors.newFixedThreadPool(2);
+            futures.add(threadPool.submit(new Callable<String>() {
+
+                @Override
+                public String call() throws Exception {
+                    StringBuilder builder = new StringBuilder(1_000_000);
+                    ThreadLocalRandom random = ThreadLocalRandom.current();
+                    builder.append(accountsNumber);
+                    for (int i = 0; i < accountsNumber; i++) {
+                        builder.append(' ').append(random.nextInt(0, DEFAULT_BALANCE_BOUND));
+                    }
+
+                    return builder.toString();
+                }
+            }));
+            futures.add(threadPool.submit(new Callable<String>() {
+
+                @Override
+                public String call() throws Exception {
+                    StringBuilder builder = new StringBuilder(10_000_000);
+                    ThreadLocalRandom random = ThreadLocalRandom.current();
+                    builder.append(transferNumber);
+                    for (int i = 0; i < transferNumber; i++) {
+                        builder.append(' ').append( random.nextInt(0, accountsNumber) ).
+                                append(' ').append( random.nextInt(0, accountsNumber) ).
+                                append(' ').append( random.nextInt(0, TRANSFER_AMOUNT_BOUND) );
+                    }
+
+                    return builder.toString();
+                }
+            }));
+
+            threadPool.shutdownNow();
+            final String[] result = new String[futures.size()];
+            for (int i = 0; i < futures.size(); i++){
+                try {
+                    result[i] = futures.get(i).get();
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            return result;
+        }
     }
 }

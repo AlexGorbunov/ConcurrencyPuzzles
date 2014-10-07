@@ -14,43 +14,6 @@ public class SinSeriesSimulation {
                     "but current is " + args.length);
         threadsCount = Integer.parseInt(args[0]);
 
-        /*List<Future<Double>> futures = new ArrayList<>();
-        ExecutorService service = Executors.newFixedThreadPool(threadsCount);
-
-        long startTime = System.nanoTime();
-        for (int i = 0; i < threadsCount; i++) {
-            final int item = i;
-            futures.add(
-                    service.submit(
-                            new Callable<Double>() {
-                                @Override
-                                public Double call() throws Exception {
-                                    double sum = 0.d;
-
-                                    for (int k = -1 * ITERATIONS_COUNT + item; k < ITERATIONS_COUNT; k += threadsCount ) {
-                                        sum += Math.sin(k);
-                                    }
-
-                                    return sum;
-                                }
-                            } ));
-        }
-
-        service.shutdown();
-
-        double totalSinSum = 0.d;
-        for (Future<Double> future : futures) {
-            try {
-                totalSinSum += future.get();
-            } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
-            }
-        }
-        long endTime = System.nanoTime();
-
-        while(!service.isTerminated()) {}*/
-
-
         //--------------------------------------------------------
         Thread[] threads = new Thread[threadsCount];
 

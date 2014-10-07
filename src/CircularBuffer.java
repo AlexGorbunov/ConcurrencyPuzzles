@@ -65,6 +65,10 @@ public class CircularBuffer<T> {
         return tasksQueue.size() == COUNT;
     }
 
+    public boolean isEmpty() {
+        return tasksQueue.isEmpty();
+    }
+
     public static void main(String[] args) {
         final CircularBuffer<Integer> cb = new CircularBuffer<>(23);
 

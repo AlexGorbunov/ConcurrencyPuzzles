@@ -144,7 +144,7 @@ public class FinancialServicesSimulation<T> {
             throw new InvalidPropertiesFormatException("Invalid transfers declaration");
 
         final int transfersCount = Integer.valueOf(transfers[0]);
-        if (transfersCount != (transfers.length - 1) / 3) {
+        if (transfersCount != (transfers.length - 1) / TRANSFER_FORMAT_ARGUMENTS) {
             throw new IllegalArgumentException("Claimed transfers number is not equal to real transfers declaration");
         }
 

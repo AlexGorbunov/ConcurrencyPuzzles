@@ -1,6 +1,7 @@
 import javax.naming.InsufficientResourcesException;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Created by Alex on 25.09.2014.
@@ -58,9 +59,9 @@ public class Bank {
         class TransferProcessing {
             public void transfer() throws InsufficientFundsException {
                 if (fromAccount.getBalance() < amount)
-                    System.out.println("Insufficient funds on account number: " + fromAccount.getID() +
-                            " with balance of " + fromAccount.getBalance() + " to withdraw " + amount);
-                    //throw new InsufficientFundsException("Insufficient funds on account number: " + fromAccount.getID());
+                    System.err.println("Insufficient funds on account number: " + fromAccount.getID() +
+                            " with balance of " + String.format("%.5f", fromAccount.getBalance()) +
+                            " to withdraw " + String.format("%.5f", amount));
                 else {
                     fromAccount.credit(amount);
                     toAccount.debit(amount);
@@ -119,15 +120,16 @@ public class Bank {
         class Worker extends Thread {
             @Override
             public void run() {
+                ThreadLocalRandom random = ThreadLocalRandom.current();
                 try {
                     latch.await();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
 
-                bank.transfer(accounts[Math.abs(randomizer.nextInt()) % ACCOUNTS_COUNT],
-                        accounts[Math.abs(randomizer.nextInt()) % ACCOUNTS_COUNT],
-                        Math.abs(randomizer.nextDouble()) * 320.d);
+                bank.transfer(accounts[random.nextInt(0, ACCOUNTS_COUNT)],
+                        accounts[random.nextInt(0, ACCOUNTS_COUNT)],
+                        random.nextDouble(0, 320.d));
             }
         }
 
@@ -139,14 +141,16 @@ public class Bank {
 
         latch.countDown();
 
-        Thread.sleep(300);
+        for (Thread thread : threads) {
+            if (thread != null && thread.isAlive()) thread.join();
+        }
 
         double finalAmount = 0.d;
         for (int i = 0; i < accounts.length; i++) {
             finalAmount += accounts[i].getBalance();
         }
-        System.out.println("Initial bank balance was: " + totalAmount);
-        System.out.println("Final bank balance is:    " + finalAmount);
+        System.out.println("Initial bank balance was: " + String.format("%.6f", totalAmount));
+        System.out.println("Final bank balance is:    " + String.format("%.6f", finalAmount));
     }
 
 }

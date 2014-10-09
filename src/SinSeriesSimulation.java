@@ -1,5 +1,4 @@
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Created by Alex on 26.09.2014.
@@ -7,6 +6,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SinSeriesSimulation {
     private static final int ITERATIONS_COUNT = 100_000_000;
     private static int threadsCount = 1;
+    private static Object lock = new Object();
 
     public static void main(String[] args) {
         if (args.length != 1)
@@ -17,8 +17,8 @@ public class SinSeriesSimulation {
         //--------------------------------------------------------
         Thread[] threads = new Thread[threadsCount];
 
-        final AtomicReference<Double> atomicSumRef = new AtomicReference<>(0.d);
         final CountDownLatch latch = new CountDownLatch(1);
+        final double[] seriesSum = new double[1];
 
         for (int i = 0; i < threadsCount; i++) {
             final int item = i;
@@ -38,8 +38,8 @@ public class SinSeriesSimulation {
                         sum += Math.sin(k);
                     }
 
-                    synchronized (atomicSumRef) {
-                        atomicSumRef.set(atomicSumRef.get() + sum);
+                    synchronized (lock) {
+                        seriesSum[0] += sum;
                     }
                 }
             });
@@ -58,9 +58,10 @@ public class SinSeriesSimulation {
 
         long endTime = System.nanoTime();
 
-        double totalSinSum = atomicSumRef.get();
+        double totalSinSum = seriesSum[0];
 
-        System.out.println("Total sum of sinus series from: " + -ITERATIONS_COUNT + " to " + ITERATIONS_COUNT + " is: " + totalSinSum);
+        System.out.println("Total sum of sinus series from: " + -ITERATIONS_COUNT + " to " +
+                ITERATIONS_COUNT + " is: " + String.format("%.6f", totalSinSum));
         System.out.println("THREADS " + threadsCount);
         System.out.println("ITERATIONS " + ITERATIONS_COUNT);
         System.out.println("TIME " + (double)(endTime - startTime)/1_000_000_000 + "sec");

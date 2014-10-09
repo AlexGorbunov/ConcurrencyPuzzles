@@ -3,7 +3,7 @@ import java.util.concurrent.*;
 /**
  * Created by Alex on 26.09.2014.
  */
-public class SinSeriesSimulation {
+public class SinSeriesSimulationThreads {
     private static final int ITERATIONS_COUNT = 100_000_000;
     private static int threadsCount = 1;
     private static Object lock = new Object();

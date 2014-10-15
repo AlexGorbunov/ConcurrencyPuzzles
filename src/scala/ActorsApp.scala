@@ -93,12 +93,8 @@ object ActorsApp {
                 val result: TreeSet[TweetMessage] = Await.result(future, timeout.duration)
 
                 result.foreach(e => {
-                  e.asFullTweet()
+                  println(e.asFullTweet())
                 })
-                val iter = result.iterator
-                while (iter.hasNext) {
-                  println(iter.next().asFullTweet())
-                }
               }
             }
           }

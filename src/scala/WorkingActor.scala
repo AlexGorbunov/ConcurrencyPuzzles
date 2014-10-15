@@ -14,21 +14,6 @@ class WorkingActor extends Actor {
   val usersToFollow: mutable.HashSet[ActorRef] = mutable.HashSet()
   val tweetsList : mutable.MutableList[TweetMessage] = mutable.MutableList()
 
-  def printTweets(args: mutable.PriorityQueue[_]): Unit = {
-    args.foreach(println)
-  }
-
-  def getTweets(args: mutable.MutableList[_]): String = {
-    val builder = new mutable.StringBuilder
-    builder ++=("\n")
-    val iter = args.reverseIterator
-    while (iter.hasNext) {
-      builder ++=(iter.next().toString)
-      builder ++=("\n")
-    }
-    return builder.toString()
-  }
-
   override def receive: Receive = initial()
 
   def initial(): Receive = {
@@ -36,15 +21,29 @@ class WorkingActor extends Actor {
       context.become(posting)
     }
     case "Read" => {
-      context.become(reading)
-      reading()
+      sender() ! tweetsList.clone()
     }
     case "Follow" => {
       context.become(following)
     }
     case "Wall" => {
-      context.become(showWall)
-      showWall()
+      var sortedTweetsSet : TreeSet[TweetMessage] = new TreeSet[TweetMessage]()
+
+      implicit val timeout = Timeout(2 seconds)
+
+      var futuresList: List[Future[mutable.MutableList[TweetMessage]]] = List()
+      usersToFollow.foreach(s => {
+        futuresList = futuresList.::(
+          ask(s, "Read").mapTo[mutable.MutableList[TweetMessage]] )
+      })
+
+      sortedTweetsSet ++= (tweetsList.clone())
+      futuresList.foreach(e => {
+        val result : mutable.MutableList[TweetMessage] = Await.result(e, timeout.duration)
+        sortedTweetsSet ++= (result)
+      })
+
+      sender ! sortedTweetsSet
     }
     case "Finish" => context.stop(self)
     case mes => unhandled(mes)
@@ -57,13 +56,6 @@ class WorkingActor extends Actor {
     }
   }
 
-  def reading: Receive = {
-    case message => {
-      sender() ! tweetsList.clone()
-      context.unbecome()
-    }
-  }
-
   def following(): Receive = {
     case message => {
       if (message.isInstanceOf[ActorRef]) {
@@ -72,22 +64,6 @@ class WorkingActor extends Actor {
       } else {
         sender() ! "FAULT"
       }
-      context.unbecome()
-    }
-  }
-
-  def showWall: Receive = {
-    case message => {
-      var sortedTweetsSet : TreeSet[TweetMessage] = new TreeSet[TweetMessage]()
-      sortedTweetsSet ++= (tweetsList.clone())
-      usersToFollow.foreach(s => {
-        implicit val timeout = Timeout(2 seconds)
-        val future: Future[mutable.MutableList[TweetMessage]] =
-          ask(s, "Read").mapTo[mutable.MutableList[TweetMessage]]
-        val result : mutable.MutableList[TweetMessage] = Await.result(future, timeout.duration)
-        sortedTweetsSet ++= (result)
-      })
-      sender ! sortedTweetsSet
       context.unbecome()
     }
   }
